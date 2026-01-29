@@ -3,6 +3,8 @@
 Secrets is a CLI tool for managing encrypted volumes using LUKS and gocryptfs. It handles creating, mounting, and unmounting encrypted storage with generated GPG-encrypted key files stored on removable media.
 
 
+https://github.com/user-attachments/assets/68b22b5e-ef51-4a50-add3-7979400aace4
+
 
 # Setup
 
