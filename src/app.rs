@@ -49,6 +49,7 @@ impl App {
             Command::Open { name } => self.open(name.as_deref()),
             Command::Close { name } => self.close(name.as_deref()),
             Command::Delete { name } => self.delete(&name),
+            Command::Move { name, target_dir } => self.move_secret(&name, &target_dir),
             Command::Key { action } => self.key(action),
         }
     }
@@ -595,6 +596,90 @@ impl App {
         println!("\n  {}: The key file ({}.key.gpg) still exists on your removable media.", "Note".cyan(), name);
         info("You should delete it manually if you no longer need it.");
 
+        Ok(())
+    }
+
+    fn move_secret(&mut self, name: &str, target_dir: &str) -> Result<(), Error> {
+        let secret = self.config.get(name)?.clone();
+
+        // Check if it's open
+        if backend::backend_for(&secret).is_open(&secret)? {
+            eprintln!("Secret '{}' is currently open.", name);
+            eprintln!("Please close it first with: secrets close {}", name);
+            return Err(Error::MountFailed("Cannot move an open secret".to_string()));
+        }
+
+        // Get the current path
+        let current_path = match &secret.backend {
+            BackendConfig::Luks { image_path } => image_path.clone(),
+            BackendConfig::Gocryptfs { encrypted_path } => encrypted_path.clone(),
+        };
+
+        let current_path_obj = std::path::Path::new(&current_path);
+
+        // Check source exists
+        if !current_path_obj.exists() {
+            return Err(Error::MountFailed(format!(
+                "Source path does not exist: {}",
+                current_path
+            )));
+        }
+
+        // Extract filename from current path
+        let filename = current_path_obj
+            .file_name()
+            .ok_or_else(|| Error::MountFailed("Could not extract filename from path".to_string()))?;
+
+        // Check target directory exists and is a directory
+        let target_dir_obj = std::path::Path::new(target_dir);
+        if !target_dir_obj.exists() {
+            return Err(Error::MountFailed(format!(
+                "Target directory does not exist: {}",
+                target_dir
+            )));
+        }
+        if !target_dir_obj.is_dir() {
+            return Err(Error::MountFailed(format!(
+                "Target is not a directory: {}",
+                target_dir
+            )));
+        }
+
+        // Canonicalize target directory to get absolute path
+        let target_dir_canonical = target_dir_obj.canonicalize()?;
+
+        // Build new path with absolute target directory
+        let new_path = target_dir_canonical.join(filename);
+        let new_path_str = new_path.to_string_lossy().to_string();
+
+        // Check target doesn't already exist
+        if new_path.exists() {
+            return Err(Error::MountFailed(format!(
+                "Target already exists: {}",
+                new_path_str
+            )));
+        }
+
+        // Perform the move
+        status(&format!("Moving {} to {}...", current_path, new_path_str));
+        std::fs::rename(&current_path, &new_path)?;
+
+        // Update config
+        let new_backend = match &secret.backend {
+            BackendConfig::Luks { .. } => BackendConfig::Luks { image_path: new_path_str.clone() },
+            BackendConfig::Gocryptfs { .. } => BackendConfig::Gocryptfs { encrypted_path: new_path_str.clone() },
+        };
+
+        let updated_secret = Secret {
+            name: secret.name.clone(),
+            mount_path: secret.mount_path.clone(),
+            backend: new_backend,
+        };
+
+        self.config.remove(name)?;
+        self.config.add(updated_secret)?;
+
+        success(&format!("Moved '{}' to {}", name, new_path_str));
         Ok(())
     }
 

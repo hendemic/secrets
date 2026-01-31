@@ -39,6 +39,13 @@ pub enum Command {
     Open { name: Option<String> },
     Close { name: Option<String> },
     Delete { name: String },
+    /// Move a secret's encrypted storage to a new directory
+    Move {
+        /// Name of the secret to move
+        name: String,
+        /// Target directory (the filename is preserved)
+        target_dir: String,
+    },
     /// Key management for LUKS volumes (not yet implemented)
     Key {
         #[command(subcommand)]
