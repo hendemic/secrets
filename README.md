@@ -33,6 +33,7 @@ secrets create                      # Create a new encrypted volume (interactive
 secrets list                        # List all secrets and their status
 secrets open <name>                 # Mount/decrypt a secret
 secrets close <name>                # Unmount/encrypt a secret
+secrets move <name> <directory>     # Moves secret to new directory (keeping same name)
 secrets add <name> ...              # Add an existing encrypted volume to config
 secrets remove <name>               # Remove a secret from config (keeps files)
 secrets delete <name>               # Delete a secret and its encrypted data
