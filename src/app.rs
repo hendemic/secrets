@@ -662,7 +662,16 @@ impl App {
 
         // Perform the move
         status(&format!("Moving {} to {}...", current_path, new_path_str));
-        std::fs::rename(&current_path, &new_path)?;
+        if let Err(e) = std::fs::rename(&current_path, &new_path) {
+            // Fall back to copy + delete for cross-device moves
+            if e.kind() == std::io::ErrorKind::CrossesDevices {
+                status("Cross-device move detected, copying instead...");
+                std::fs::copy(&current_path, &new_path)?;
+                std::fs::remove_file(&current_path)?;
+            } else {
+                return Err(e.into());
+            }
+        }
 
         // Update config
         let new_backend = match &secret.backend {
